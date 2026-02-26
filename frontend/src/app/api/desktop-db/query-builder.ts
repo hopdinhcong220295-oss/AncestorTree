@@ -8,8 +8,14 @@
  */
 
 import type { Database } from 'sql.js';
-import { coerceRowFromSqlite, coerceDataToSqlite, generateUUID } from './type-coerce';
+import { coerceRowFromSqlite, coerceDataToSqlite, generateUUID, isBooleanColumn } from './type-coerce';
 import { notFoundError, sqliteError } from './error-mapper';
+
+/** Tables that have an updated_at column (from schema inspection) */
+const TABLES_WITH_UPDATED_AT = new Set([
+  'people', 'families', 'profiles', 'achievements',
+  'clan_articles', 'cau_duong_pools', 'cau_duong_assignments',
+]);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,15 +46,24 @@ interface QueryResult {
 
 // ─── Filter Builder ─────────────────────────────────────────────────────────
 
-function buildWhere(filters: Filter[]): { clause: string; params: unknown[] } {
+function buildWhere(filters: Filter[], table?: string): { clause: string; params: unknown[] } {
   const conditions: string[] = [];
   const params: unknown[] = [];
+
+  /** Coerce boolean values to SQLite INTEGER 0/1 when column is boolean */
+  const coerceFilterValue = (column: string | undefined, value: unknown): unknown => {
+    if (column && table && isBooleanColumn(table, column)) {
+      if (value === true) return 1;
+      if (value === false) return 0;
+    }
+    return value;
+  };
 
   for (const f of filters) {
     switch (f.type) {
       case 'eq':
         conditions.push(`"${f.column}" = ?`);
-        params.push(f.value);
+        params.push(coerceFilterValue(f.column, f.value));
         break;
 
       case 'in': {
@@ -58,7 +73,7 @@ function buildWhere(filters: Filter[]): { clause: string; params: unknown[] } {
         } else {
           const placeholders = values.map(() => '?').join(', ');
           conditions.push(`"${f.column}" IN (${placeholders})`);
-          params.push(...values);
+          params.push(...values.map(v => coerceFilterValue(f.column, v)));
         }
         break;
       }
@@ -81,7 +96,7 @@ function buildWhere(filters: Filter[]): { clause: string; params: unknown[] } {
           conditions.push(`"${f.column}" IS NOT NULL`);
         } else {
           conditions.push(`"${f.column}" != ?`);
-          params.push(f.value);
+          params.push(coerceFilterValue(f.column, f.value));
         }
         break;
 
@@ -157,7 +172,7 @@ export function executeQuery(db: Database, payload: QueryPayload): QueryResult {
 
 function executeSelect(db: Database, payload: QueryPayload): QueryResult {
   const columns = payload.columns === '*' ? '*' : payload.columns || '*';
-  const { clause, params } = buildWhere(payload.filters);
+  const { clause, params } = buildWhere(payload.filters, payload.table);
 
   let sql = `SELECT ${columns} FROM "${payload.table}" ${clause}`;
 
@@ -214,7 +229,9 @@ function executeInsert(db: Database, payload: QueryPayload): QueryResult {
     // Auto-set timestamps
     const now = new Date().toISOString();
     if (!coerced.created_at) coerced.created_at = now;
-    if (!coerced.updated_at) coerced.updated_at = now;
+    if (TABLES_WITH_UPDATED_AT.has(payload.table) && !coerced.updated_at) {
+      coerced.updated_at = now;
+    }
 
     const columns = Object.keys(coerced);
     const values = Object.values(coerced);
@@ -226,14 +243,13 @@ function executeInsert(db: Database, payload: QueryPayload): QueryResult {
     // Return the inserted row if .select() was chained
     if (payload.columns) {
       const selectCols = payload.columns === '*' ? '*' : payload.columns;
-      const result = db.exec(`SELECT ${selectCols} FROM "${payload.table}" WHERE id = '${coerced.id}'`);
-      if (result.length > 0 && result[0].values.length > 0) {
-        const row: Record<string, unknown> = {};
-        result[0].columns.forEach((col, i) => {
-          row[col] = result[0].values[0][i];
-        });
+      const returnStmt = db.prepare(`SELECT ${selectCols} FROM "${payload.table}" WHERE id = ?`);
+      returnStmt.bind([coerced.id]);
+      if (returnStmt.step()) {
+        const row = returnStmt.getAsObject() as Record<string, unknown>;
         insertedRows.push(coerceRowFromSqlite(payload.table, row));
       }
+      returnStmt.free();
     }
   }
 
@@ -251,13 +267,15 @@ function executeUpdate(db: Database, payload: QueryPayload): QueryResult {
   const rawBody = Array.isArray(payload.body) ? payload.body[0] : (payload.body || {});
   const data = coerceDataToSqlite(payload.table, rawBody);
 
-  // Auto-update timestamp
-  data.updated_at = new Date().toISOString();
+  // Auto-update timestamp (only for tables that have the column)
+  if (TABLES_WITH_UPDATED_AT.has(payload.table)) {
+    data.updated_at = new Date().toISOString();
+  }
 
   const setClauses = Object.keys(data).map(k => `"${k}" = ?`);
   const setValues = Object.values(data);
 
-  const { clause, params } = buildWhere(payload.filters);
+  const { clause, params } = buildWhere(payload.filters, payload.table);
 
   const sql = `UPDATE "${payload.table}" SET ${setClauses.join(', ')} ${clause}`;
   db.run(sql, [...setValues, ...params]);
@@ -286,7 +304,7 @@ function executeUpdate(db: Database, payload: QueryPayload): QueryResult {
 }
 
 function executeDelete(db: Database, payload: QueryPayload): QueryResult {
-  const { clause, params } = buildWhere(payload.filters);
+  const { clause, params } = buildWhere(payload.filters, payload.table);
   const sql = `DELETE FROM "${payload.table}" ${clause}`;
   db.run(sql, params);
   return { data: null, error: null };

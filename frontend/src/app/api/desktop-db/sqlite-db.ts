@@ -13,6 +13,7 @@ import fs from 'fs';
 import os from 'os';
 
 let db: Database | null = null;
+let dbPromise: Promise<Database> | null = null;
 let dbPath: string = '';
 
 function getDataDir(): string {
@@ -26,10 +27,22 @@ function getDbPath(): string {
   return dbPath;
 }
 
-/** Get or create the singleton database instance */
+/** Get or create the singleton database instance (race-safe) */
 export async function getDatabase(): Promise<Database> {
   if (db) return db;
+  if (dbPromise) return dbPromise;
 
+  dbPromise = initDatabase();
+  try {
+    db = await dbPromise;
+    return db;
+  } catch (err) {
+    dbPromise = null; // Allow retry on failure
+    throw err;
+  }
+}
+
+async function initDatabase(): Promise<Database> {
   const SQL = await initSqlJs({
     locateFile: () => path.join(process.cwd(), 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
   });
@@ -40,18 +53,21 @@ export async function getDatabase(): Promise<Database> {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  let database: Database;
   if (fs.existsSync(filePath)) {
     const buffer = fs.readFileSync(filePath);
-    db = new SQL.Database(buffer);
+    database = new SQL.Database(buffer);
   } else {
-    db = new SQL.Database();
+    database = new SQL.Database();
   }
 
-  // Enable WAL-like behavior (though sql.js is in-memory)
-  db.run('PRAGMA journal_mode = MEMORY');
-  db.run('PRAGMA foreign_keys = ON');
+  database.run('PRAGMA journal_mode = MEMORY');
+  database.run('PRAGMA foreign_keys = ON');
 
-  return db;
+  // Run migrations on init (CTO B-1: must run inside Next.js process, not Electron main)
+  applyMigrations(database);
+
+  return database;
 }
 
 /**
@@ -76,10 +92,12 @@ export function databaseExists(): boolean {
   return fs.existsSync(getDbPath());
 }
 
-/** Run initial migrations if needed */
-export async function runMigrations(): Promise<void> {
-  const database = await getDatabase();
-
+/**
+ * Apply pending SQL migrations (called internally from initDatabase).
+ * Migration dir resolved via MIGRATIONS_DIR env (set by Electron server.ts)
+ * with fallback to relative path for dev workflow.
+ */
+function applyMigrations(database: Database): void {
   // Create migrations tracking table
   database.run(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -89,34 +107,40 @@ export async function runMigrations(): Promise<void> {
     )
   `);
 
-  // Load and run migration files from desktop/migrations/
-  const migrationsDir = path.join(process.cwd(), '..', 'desktop', 'migrations');
-  // Fallback: check if migrations are bundled alongside
-  const altMigrationsDir = path.join(getDataDir(), 'migrations');
-
-  const migrationsDirs = [migrationsDir, altMigrationsDir];
-  let migrationFiles: string[] = [];
+  // CTO B-2: Resolve migrations dir from env (set by Electron server.ts)
+  // - Dev: path.join(__dirname, '..', 'desktop', 'migrations') via MIGRATIONS_DIR
+  // - Production: path.join(process.resourcesPath, 'migrations') via MIGRATIONS_DIR
+  // - Fallback: relative path from Next.js cwd (dev only)
+  const migrationsDirs = [
+    process.env.MIGRATIONS_DIR,
+    path.join(process.cwd(), '..', 'desktop', 'migrations'),
+  ].filter(Boolean) as string[];
 
   for (const dir of migrationsDirs) {
-    if (fs.existsSync(dir)) {
-      migrationFiles = fs.readdirSync(dir)
-        .filter(f => f.endsWith('.sql'))
-        .sort();
-      if (migrationFiles.length > 0) {
-        // Run pending migrations
-        for (const file of migrationFiles) {
-          const [applied] = database.exec(
-            `SELECT 1 FROM _migrations WHERE name = '${file}'`
-          );
-          if (!applied || applied.values.length === 0) {
-            const sql = fs.readFileSync(path.join(dir, file), 'utf-8');
-            database.exec(sql);
-            database.run(`INSERT INTO _migrations (name) VALUES ('${file}')`);
-          }
-        }
-        flushToDisk();
-        break;
+    if (!fs.existsSync(dir)) continue;
+
+    const migrationFiles = fs.readdirSync(dir)
+      .filter(f => f.endsWith('.sql'))
+      .sort();
+
+    if (migrationFiles.length === 0) continue;
+
+    let applied = false;
+    for (const file of migrationFiles) {
+      const checkStmt = database.prepare('SELECT 1 FROM _migrations WHERE name = ?');
+      checkStmt.bind([file]);
+      const isApplied = checkStmt.step();
+      checkStmt.free();
+
+      if (!isApplied) {
+        const sql = fs.readFileSync(path.join(dir, file), 'utf-8');
+        database.exec(sql);
+        database.run('INSERT INTO _migrations (name) VALUES (?)', [file]);
+        applied = true;
       }
     }
+
+    if (applied) flushToDisk();
+    break; // Use first valid dir
   }
 }

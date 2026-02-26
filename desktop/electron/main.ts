@@ -68,8 +68,7 @@ app.whenReady().then(async () => {
   createWindow();
   await loadApp();
 
-  // TODO Phase 2: runMigrations() — run SQLite migrations before starting server
-  // await runMigrations(getDataDir());
+  // Migrations are auto-applied inside getDatabase() (sqlite-db.ts) on first request
 
   // Start Next.js server
   try {

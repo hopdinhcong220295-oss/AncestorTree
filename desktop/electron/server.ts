@@ -78,6 +78,11 @@ export async function startServer(): Promise<string> {
 
   const dataDir = getDataDir();
 
+  // CTO B-2: Resolve migrations dir based on environment
+  const migrationsDir = process.env.NODE_ENV === 'development'
+    ? path.join(__dirname, '..', '..', 'desktop', 'migrations')
+    : path.join(process.resourcesPath || '', 'migrations');
+
   serverProcess = fork(serverScript, [], {
     env: {
       ...process.env,
@@ -86,6 +91,7 @@ export async function startServer(): Promise<string> {
       NEXT_PUBLIC_DESKTOP_MODE: 'true',
       DESKTOP_MODE: 'true',
       DESKTOP_DATA_DIR: dataDir,
+      MIGRATIONS_DIR: migrationsDir,
       NODE_ENV: 'production',
     },
     cwd: standaloneDir,

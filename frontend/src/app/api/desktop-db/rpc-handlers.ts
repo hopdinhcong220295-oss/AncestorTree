@@ -20,38 +20,47 @@ function isPersonInSubtree(
 ): boolean {
   if (rootId === targetId) return true;
 
-  // BFS/DFS through family tree
+  // BFS through family tree using parameterized queries
   const visited = new Set<string>();
   const queue = [rootId];
 
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
-    if (visited.has(currentId)) continue;
-    visited.add(currentId);
+  const familyStmt = db.prepare(
+    'SELECT id FROM families WHERE father_id = ? OR mother_id = ?'
+  );
+  const childStmt = db.prepare(
+    'SELECT person_id FROM children WHERE family_id = ?'
+  );
 
-    // Find families where this person is a parent
-    const families = db.exec(
-      `SELECT id FROM families WHERE father_id = '${currentId}' OR mother_id = '${currentId}'`
-    );
+  try {
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
 
-    if (families.length > 0) {
-      for (const row of families[0].values) {
-        const familyId = row[0] as string;
+      // Find families where this person is a parent
+      familyStmt.bind([currentId, currentId]);
+      const familyIds: string[] = [];
+      while (familyStmt.step()) {
+        const row = familyStmt.getAsObject() as Record<string, unknown>;
+        familyIds.push(row.id as string);
+      }
+
+      for (const familyId of familyIds) {
         // Find children in this family
-        const children = db.exec(
-          `SELECT person_id FROM children WHERE family_id = '${familyId}'`
-        );
-        if (children.length > 0) {
-          for (const childRow of children[0].values) {
-            const childId = childRow[0] as string;
-            if (childId === targetId) return true;
-            if (!visited.has(childId)) {
-              queue.push(childId);
-            }
+        childStmt.bind([familyId]);
+        while (childStmt.step()) {
+          const childRow = childStmt.getAsObject() as Record<string, unknown>;
+          const childId = childRow.person_id as string;
+          if (childId === targetId) return true;
+          if (!visited.has(childId)) {
+            queue.push(childId);
           }
         }
       }
     }
+  } finally {
+    familyStmt.free();
+    childStmt.free();
   }
 
   return false;

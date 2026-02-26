@@ -12,12 +12,17 @@ import { randomUUID } from 'crypto';
 /** Columns that are BOOLEAN in PostgreSQL but INTEGER 0/1 in SQLite */
 const BOOLEAN_COLUMNS: Record<string, Set<string>> = {
   people: new Set(['is_living', 'is_patrilineal']),
-  families: new Set([]),
   events: new Set(['recurring']),
   media: new Set(['is_primary']),
   achievements: new Set(['is_featured']),
+  clan_articles: new Set(['is_featured']),
   cau_duong_pools: new Set(['is_active']),
 };
+
+/** Check if a column is boolean for a given table */
+export function isBooleanColumn(table: string, column: string): boolean {
+  return BOOLEAN_COLUMNS[table]?.has(column) ?? false;
+}
 
 /** Columns that are JSONB in PostgreSQL but TEXT in SQLite */
 const JSON_COLUMNS: Record<string, Set<string>> = {
