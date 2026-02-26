@@ -218,7 +218,6 @@ export default function EventsPage() {
                 <DialogDescription>Thêm ngày giỗ, lễ tết hoặc sự kiện dòng họ</DialogDescription>
               </DialogHeader>
               <AddEventDialog
-                people={people || []}
                 onClose={() => setDialogOpen(false)}
               />
             </DialogContent>
