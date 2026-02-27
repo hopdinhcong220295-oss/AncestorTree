@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Gia Phả Điện Tử - Database Setup
--- Họ Đặng làng Kỷ Các
+-- Họ Đinh Thôn An Thái
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Enable UUID extension
@@ -329,11 +329,11 @@ CREATE TRIGGER on_auth_user_created
 -- Uncomment to add sample data
 /*
 INSERT INTO people (handle, display_name, surname, first_name, gender, generation, chi, birth_year, is_living, is_patrilineal) VALUES
-('P001', 'Đặng Văn Thủy Tổ', 'Đặng', 'Thủy Tổ', 1, 1, 1, 1850, false, true),
-('P002', 'Nguyễn Thị A', 'Nguyễn', 'A', 2, 1, 1, 1855, false, false),
-('P003', 'Đặng Văn B', 'Đặng', 'B', 1, 2, 1, 1880, false, true),
-('P004', 'Đặng Văn C', 'Đặng', 'C', 1, 2, 1, 1882, false, true),
-('P005', 'Đặng Thị D', 'Đặng', 'D', 2, 2, 1, 1885, false, true);
+('P001', 'Đinh Thủy Tổ', 'Đinh', 'Thủy Tổ', 1, 1, 1, 1850, false, true),
+('P002', 'Đinh Thị A', 'Đinh', 'A', 2, 1, 1, 1855, false, false),
+('P003', 'Đinh Văn B', 'Đinh', 'B', 1, 2, 1, 1880, false, true),
+('P004', 'Đinh Văn C', 'Đinh', 'C', 1, 2, 1, 1882, false, true),
+('P005', 'Đinh Thị D', 'Đinh', 'D', 2, 2, 1, 1885, false, true);
 
 INSERT INTO families (handle, father_id, mother_id) VALUES
 ('F001', (SELECT id FROM people WHERE handle = 'P001'), (SELECT id FROM people WHERE handle = 'P002'));
