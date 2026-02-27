@@ -209,8 +209,10 @@ export default function AdminDocumentsPage() {
       });
       toast.success('Đã tải lên tài liệu');
       setDialogOpen(false);
-    } catch {
-      toast.error('Lỗi khi tải lên');
+    } catch (err) {
+      console.error('Document upload error:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Lỗi khi tải lên: ${message}`);
     }
   };
 

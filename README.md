@@ -59,6 +59,16 @@ Phần mềm quản lý gia phả điện tử giúp gìn giữ và truyền th�
 - **SEO** - Canonical URL, robots.txt, Open Graph
 - **Download links** - Liên kết tải desktop app cho macOS/Windows
 
+### Kho tài liệu & Hướng dẫn (v2.2)
+
+- **Kho tài liệu** - Upload/lưu trữ ảnh lịch sử, gia phả giấy (PDF), bản đồ, video, bài viết
+- **Phân loại** - 6 danh mục: Ảnh lịch sử, Giấy tờ, Bản đồ, Video, Bài viết, Khác
+- **Tìm kiếm & lọc** - Gallery view với filter theo danh mục, tìm theo tiêu đề
+- **Gắn thẻ thành viên** - Liên kết tài liệu với thành viên trong gia phả
+- **Admin quản lý** - CRUD tài liệu, upload file, xác nhận xóa
+- **Hướng dẫn sử dụng** - Trang `/help` trong app: 5 phần (điều hướng, workflow, phân quyền, mẹo, FAQ)
+- **Desktop conditional** - Bản Desktop hiển thị thêm hướng dẫn sao lưu + bảng so sánh Desktop vs Web
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -139,6 +149,8 @@ AncestorTree/
 │   │   │       ├── directory/      # Thư mục thành viên
 │   │   │       ├── events/         # Lịch sự kiện
 │   │   │       ├── fund/           # Quỹ khuyến học
+│   │   │       ├── documents/       # Kho tài liệu (v2.2)
+│   │   │       ├── help/           # Hướng dẫn sử dụng (v2.2)
 │   │   │       ├── people/         # Quản lý thành viên
 │   │   │       ├── tree/           # Cây gia phả
 │   │   │       └── admin/          # Admin panel
@@ -157,7 +169,9 @@ AncestorTree/
 │           ├── 20260224000002_cau_duong_migration.sql
 │           ├── 20260224000003_sprint75_migration.sql
 │           ├── 20260224000004_storage_setup.sql
-│           └── 20260226000005_security_hardening.sql
+│           ├── 20260226000005_security_hardening.sql
+│           ├── 20260227000006_sprint11_kho_tai_lieu.sql
+│           └── 20260227000007_storage_update_mime_types.sql
 ├── desktop/                        # Electron desktop app (Sprint 9)
 │   ├── electron/                   # Main process (main.ts, server.ts, preload.ts)
 │   ├── build/                      # App icons (icns, ico, png)
@@ -171,7 +185,7 @@ AncestorTree/
 
 ## Database
 
-13 tables across 4 layers:
+14 tables across 5 layers:
 
 | Layer | Tables | Description |
 |-------|--------|-------------|
@@ -179,6 +193,7 @@ AncestorTree/
 | Platform | `profiles`, `contributions`, `media`, `events` | Tài khoản, đóng góp, sự kiện |
 | Culture (v1.3) | `achievements`, `fund_transactions`, `scholarships`, `clan_articles` | Vinh danh, quỹ, hương ước |
 | Ceremony (v1.4) | `cau_duong_pools`, `cau_duong_assignments` | Phân công cầu đương lễ, tết |
+| Documents (v2.2) | `clan_documents` | Kho tài liệu dòng họ |
 
 All tables have Row Level Security (RLS) policies with 4 roles.
 
@@ -190,7 +205,7 @@ Full SDLC documentation (9 docs, 141KB):
 |-------|-----------|
 | 00-Foundation | Vision, Problem Statement, Market Research, Business Case |
 | 01-Planning | BRD (77 FRs + 17 NFRs), Roadmap |
-| 02-Design | Technical Design (13 tables), UI/UX Design |
+| 02-Design | Technical Design (14 tables), UI/UX Design |
 | 04-Build | Sprint Plan, Installation Guide, User Guide |
 
 See [docs/README.md](./docs/README.md) for full documentation index.
@@ -209,6 +224,7 @@ v1.6.0 LocalDev  [##########] Done - Supabase CLI + Docker local mode
 v1.7.0 Security  [##########] Done - RLS hardening + middleware fix + privacy defaults
 v1.8.0 Desktop   [##########] Done - Electron + sql.js standalone desktop app
 v2.1.0 Landing   [##########] Done - Landing page + community docs + SEO
+v2.2.0 Documents [##########] Done - Kho tài liệu + In-App Help guide
 v3.0.0 Community [----------] Future - Nhà thờ họ, Notifications, Cross-clan
 ```
 
